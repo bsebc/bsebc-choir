@@ -375,10 +375,7 @@ function homePage(){
   return `<div class="hero">${esc(t('homeSub'))}</div>
     <div class="tiles">
       ${tile('#/attendance/grid','tAttGrid','tAttGridSub',ICON.attGrid)}
-      ${tile('#/attendance/summary','tAttSum','tAttSumSub',ICON.attSum)}
       ${tile('#/songs/grid','tSongGrid','tSongGridSub',ICON.songGrid)}
-      ${tile('#/songs/services','tSongSvc','tSongSvcSub',ICON.songSvc)}
-      ${tile('#/songs/summary','tSongSum','tSongSumSub',ICON.songSum)}
       ${tile('#/sheets','tSheets','tSheetsSub',ICON.sheets)}
       ${S.session ? tile('#/admin/attendance','tAdmin','tAdminSub',ICON.user,true)
                   : tile('#/login','tSignIn','tSignInSub',ICON.user,true)}
@@ -391,9 +388,9 @@ function publicNav(active){
   const adminTab = S.session
     ? `<a href="#/admin/attendance" class="${active==='admin'?'on':''}">${esc(t('admin'))}</a>` : '';
   return `<div class="nav">
-    <a href="#/home" class="${active==='home'?'on':''}">${esc(t('home'))}</a>
     <a href="#/attendance" class="${active==='att'?'on':''}">${esc(t('attendance'))}</a>
     <a href="#/songs" class="${active==='songs'?'on':''}">${esc(t('songs'))}</a>
+    <a href="#/sheets" class="${active==='sheets'?'on':''}">${esc(t('sheets'))}</a>
     ${adminTab}${right}
   </div>`;
 }
