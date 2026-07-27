@@ -92,6 +92,9 @@
   .ic-user{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
   .ic-user b{width:13px;height:13px;border-radius:50%;background:var(--gold);display:block}
   .ic-user i{width:24px;height:12px;border-radius:12px 12px 0 0;background:var(--gold);display:block}
+  .ic-doc{width:26px;height:32px;background:#fff;border:1px solid #c9cdc4;border-radius:2px;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 5px}
+  .ic-doc span{height:3px;border-radius:2px;background:var(--blue)}
+  .ic-doc span:last-child{width:60%;background:#c9cdc4}
   @media (min-width:900px){ .panel{flex-direction:row;align-items:center;gap:20px} .panel .dates{max-width:420px} }
   @media (min-width:900px){ .ctrl{flex-direction:row;align-items:center;flex-wrap:wrap;padding:16px 20px} }
   .dates{display:flex;align-items:center;gap:8px}
@@ -157,6 +160,8 @@
   .li.on{background:#f2f4fb}
   .mini{border:1px solid var(--rule);border-radius:6px;padding:8px 12px;font-size:14px;color:var(--blue);font-weight:600;background:#fff}
   .mini.danger{border-color:#e2cdc8;color:var(--red)}
+  .acts{display:flex;gap:8px;flex:none;align-items:center}
+  label.mini{cursor:pointer}
   .btn{display:block;width:100%;background:var(--ink);color:#fff;text-align:center;font-size:17px;font-weight:600;padding:15px 0;border-radius:8px;border:0}
   .btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
   .pad{padding:16px}
@@ -217,6 +222,10 @@ const STR = {
     loading:'Loading…',noEvents:'No events in this range yet.',noSongs:'No songs recorded yet.',
     exportTitle:'EXPORT',exportAtt:'Attendance CSV',exportSongs:'Song history CSV',
     period:'Period',changePeriod:'Change',
+    tSheets:'Sheet music',tSheetsSub:'Download the notes for each song',
+    sheets:'Sheet music',download:'Download',upload:'Upload PDF',replace:'Replace',removePdf:'Remove',
+    noPdf:'No file yet',uploading:'Uploading…',pdfOnly:'Please choose a PDF file.',
+    confirmRemovePdf:'Remove the PDF for this song?',withPdf:n=>n+' with sheet music',
     home:'Home',homeSub:'Choir attendance and song ledger',
     tAttGrid:'Attendance',tAttGridSub:'Who was at each rehearsal and service',
     tAttSum:'Attendance summary',tAttSumSub:'Percentage per singer',
@@ -244,6 +253,10 @@ const STR = {
     exportTitle:'ЭКСПОРТ',exportAtt:'Посещаемость CSV',exportSongs:'История песен CSV',
     home:'Главная',homeSub:'Журнал посещаемости и песнопений',
     period:'Период',changePeriod:'Изменить',
+    tSheets:'Ноты',tSheetsSub:'Скачать ноты к каждой песне',
+    sheets:'Ноты',download:'Скачать',upload:'Загрузить PDF',replace:'Заменить',removePdf:'Удалить',
+    noPdf:'Файла нет',uploading:'Загрузка…',pdfOnly:'Выберите файл PDF.',
+    confirmRemovePdf:'Удалить ноты этой песни?',withPdf:n=>'с нотами: '+n,
     tAttGrid:'Посещаемость',tAttGridSub:'Кто был на спевках и служениях',
     tAttSum:'Сводка посещаемости',tAttSumSub:'Процент по каждому хористу',
     tSongGrid:'Песни',tSongGridSub:'Что пели на каждом служении',
@@ -271,6 +284,7 @@ const S = {
   loading: true,
   error: '',
   singers: [], songs: [], events: [], absences: [], eventSongs: [],
+  uploading: null,
   from: null, to: null,           // public grid range
   sumFrom: null, sumTo: null,     // summary range
   typeFilter: 'all',
@@ -350,6 +364,7 @@ function homePage(){
         .map(c => `<span class="${c}"></span>`).join('')}</div>`,
     songSvc: `<div class="ic-lines"><span style="width:100%"></span><span style="width:80%"></span><span style="width:90%"></span></div>`,
     songSum: `<div class="ic-cols"><span style="height:40%"></span><span style="height:75%"></span><span style="height:55%"></span><span style="height:100%"></span></div>`,
+    sheets:  `<div class="ic-doc"><span></span><span></span><span></span></div>`,
     user:    `<div class="ic-user"><b></b><i></i></div>`
   };
   const tile = (href, title, sub, icon, dark) => `<a class="tile ${dark?'dark':''}" href="${href}">
@@ -362,6 +377,7 @@ function homePage(){
       ${tile('#/songs/grid','tSongGrid','tSongGridSub',ICON.songGrid)}
       ${tile('#/songs/services','tSongSvc','tSongSvcSub',ICON.songSvc)}
       ${tile('#/songs/summary','tSongSum','tSongSumSub',ICON.songSum)}
+      ${tile('#/sheets','tSheets','tSheetsSub',ICON.sheets)}
       ${S.session ? tile('#/admin/attendance','tAdmin','tAdminSub',ICON.user,true)
                   : tile('#/login','tSignIn','tSignInSub',ICON.user,true)}
     </div>`;
@@ -641,6 +657,32 @@ function loginPage(){
   </div>`;
 }
 
+function sheetsPage(){
+  const list = S.songs.filter(s => !S.query || s.title.toLowerCase().includes(S.query.toLowerCase()));
+  const withPdf = S.songs.filter(s => s.pdf_path).length;
+  return `<div class="h">${esc(t('sheets'))}<span class="n">${esc(t('withPdf')(withPdf + '/' + S.songs.length))}</span></div>
+    <div class="searchrow" style="padding-top:12px"><input class="field" id="q" placeholder="${esc(t('search'))}" value="${esc(S.query)}"></div>` +
+    list.map(s => {
+      const busy = S.uploading === s.id;
+      const url = s.pdf_path ? sb.storage.from('sheets').getPublicUrl(s.pdf_path).data.publicUrl : '';
+      const left = `<div style="flex:1;min-width:0">
+          <div style="font-size:16px;line-height:1.2">${esc(s.title)}</div>
+          ${s.subtitle ? `<div class="sub">${esc(s.subtitle)}</div>` : ''}
+          ${s.pdf_path ? '' : `<div class="sub" style="font-style:normal;color:var(--faint)">${esc(t('noPdf'))}</div>`}
+        </div>`;
+      if (busy) return `<div class="li">${left}<div style="color:var(--blue);font-weight:600;font-size:14px">${esc(t('uploading'))}</div></div>`;
+      const dl = s.pdf_path
+        ? `<a class="mini" href="${esc(url)}" target="_blank" rel="noopener" download>${esc(t('download'))}</a>` : '';
+      const admin = S.session ? `
+        <label class="mini" for="up-${s.id}">${esc(s.pdf_path ? t('replace') : t('upload'))}
+          <input id="up-${s.id}" type="file" accept="application/pdf,.pdf" data-upload="${s.id}" style="display:none">
+        </label>
+        ${s.pdf_path ? `<button class="mini danger" data-del-pdf="${s.id}">${esc(t('removePdf'))}</button>` : ''}` : '';
+      return `<div class="li">${left}<div class="acts">${dl}${admin}</div></div>`;
+    }).join('') +
+    (S.session ? '' : `<div class="note">${esc(t('loginNote'))}</div>`);
+}
+
 /* ---------- CSV export ---------- */
 function download(name, text){
   const url = URL.createObjectURL(new Blob(['\uFEFF' + text], { type:'text/csv;charset=utf-8' }));
@@ -690,6 +732,7 @@ function render(){
       : section === 'songlist' ? 'list' : 'members');
   }
   else if (r.startsWith('#/login')) { html += publicNav('') + loginPage(); }
+  else if (r.startsWith('#/sheets')) { html += publicNav('sheets') + sheetsPage(); }
   else if (r.startsWith('#/home')) { html += publicNav('home') + homePage(); }
   else if (r.startsWith('#/songs')) {
     const tab = r.split('/')[2] || 'grid';
@@ -727,7 +770,12 @@ function afterRender(){
   const sc = document.querySelector('.scroll');
   if (!sc) return;
   const key = S.route + '|' + S.from + '|' + S.to + '|' + S.typeFilter;
+  // innerHTML rebuilds the grid, so scroll position has to be re-applied every render:
+  // jump to the newest dates when the page or range changes, otherwise stay put.
   if (S.scrollKey !== key) { S.scrollKey = key; sc.scrollLeft = sc.scrollWidth; }
+  else if (S.scrollLeft) { sc.scrollLeft = S.scrollLeft; }
+  S.scrollLeft = sc.scrollLeft;
+  sc.addEventListener('scroll', () => { S.scrollLeft = sc.scrollLeft; }, { passive: true });
 }
 
 function fail(error, retry){
@@ -738,7 +786,7 @@ function fail(error, retry){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-lang],[data-preset],[data-type],[data-kind],[data-go],[data-toggle-absent],[data-toggle-song],[data-add-song],[data-del-song],[data-edit-song],[data-add-singer],[data-del-singer],[data-edit-singer],[data-login],[data-signout],[data-del-event],[data-export],[data-dismiss],[data-retry],[data-toggle-range]');
+  const el = e.target.closest('[data-lang],[data-preset],[data-type],[data-kind],[data-go],[data-toggle-absent],[data-toggle-song],[data-add-song],[data-del-song],[data-edit-song],[data-add-singer],[data-del-singer],[data-edit-singer],[data-login],[data-signout],[data-del-event],[data-export],[data-dismiss],[data-retry],[data-toggle-range],[data-del-pdf]');
   if (!el) return;
   const d = el.dataset;
 
@@ -817,6 +865,16 @@ document.addEventListener('click', async e => {
     S.eventSongs = S.eventSongs.filter(x => x.event_id !== d.delEvent);
     return render();
   }
+  if (d.delPdf) {
+    const song = S.songs.find(s => s.id === d.delPdf);
+    if (!song || !song.pdf_path || !confirm(t('confirmRemovePdf'))) return;
+    const path = song.pdf_path;
+    const { error } = await sb.from('songs').update({ pdf_path: null }).eq('id', song.id);
+    if (error) return fail(error);
+    song.pdf_path = null; render();
+    await sb.storage.from('sheets').remove([path]);
+    return;
+  }
   if (d.export) { return exportCSV(d.export); }
   if (el.hasAttribute('data-dismiss')) { S.toast = ''; S.retry = null; return render(); }
   if (el.hasAttribute('data-retry')) { const r = S.retry; S.toast = ''; S.retry = null; render(); return r && r(); }
@@ -871,8 +929,24 @@ document.addEventListener('click', async e => {
   if (el.hasAttribute('data-signout')) { await sb.auth.signOut(); S.session = null; location.hash = '#/attendance'; return; }
 });
 
-document.addEventListener('change', e => {
+document.addEventListener('change', async e => {
   const el = e.target;
+  if (el.dataset.upload) {
+    const song = S.songs.find(s => s.id === el.dataset.upload);
+    const file = el.files && el.files[0];
+    if (!song || !file) return;
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { alert(t('pdfOnly')); return; }
+    const old = song.pdf_path;
+    const path = song.id + '/' + Date.now() + '.pdf';
+    S.uploading = song.id; render();
+    const up = await sb.storage.from('sheets').upload(path, file, { contentType: 'application/pdf' });
+    if (up.error) { S.uploading = null; return fail(up.error); }
+    const { error } = await sb.from('songs').update({ pdf_path: path }).eq('id', song.id);
+    if (error) { S.uploading = null; await sb.storage.from('sheets').remove([path]); return fail(error); }
+    song.pdf_path = path;
+    if (old) await sb.storage.from('sheets').remove([old]);
+    S.uploading = null; return render();
+  }
   if (el.dataset.range) {
     const v = el.value;
     S.preset[el.dataset.range] = null;
