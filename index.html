@@ -55,8 +55,10 @@
   .ctlbar.wide .dates{flex:none;width:340px}
   .ctlbar.wide .seg.tiny{margin-left:auto}
   .rangebtn.open{border-color:var(--ink);background:#fff}
-  .rangebtn{display:flex;align-items:center;gap:6px;border:1px solid var(--rule);background:#fbfbf9;border-radius:999px;padding:7px 12px;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
-  .rangebtn em{font-style:normal;color:var(--faint);font-size:11px}
+  .rangebtn{display:flex;align-items:center;gap:7px;border:1px solid var(--blue);background:#f2f4fb;border-radius:999px;padding:7px 12px;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .rangebtn .lb{font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .rangebtn .rv{font-weight:600}
+  .rangebtn .ed{font-style:normal;color:var(--blue);font-weight:600;font-size:12px}
   .seg.tiny{margin-left:auto;border-radius:999px}
   .seg.tiny button{padding:7px 11px;font-size:13px}
   .panel{background:#fbfbf9;border-bottom:1px solid var(--rule);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
@@ -97,7 +99,11 @@
   .seg button{flex:1;padding:8px 6px;font-size:14px;border:0;background:#fff;color:#3c4438;border-left:1px solid var(--rule)}
   .seg button:first-child{border-left:0}
   .seg button.on{background:var(--blue);color:#fff;font-weight:600}
-  .field{width:100%;border:1px solid var(--rule);border-radius:6px;padding:10px 11px;font-size:16px;background:#fbfbf9}
+  .field{width:100%;max-width:100%;min-width:0;border:1px solid var(--rule);border-radius:6px;padding:10px 11px;font-size:16px;background:#fbfbf9}
+  input[type=date].field{-webkit-appearance:none;appearance:none;display:block;text-align:left}
+  .card{min-width:0}
+  .card > *{min-width:0;max-width:100%}
+  .dates input{-webkit-appearance:none;appearance:none}
   /* grid */
   .scroll{overflow:auto;background:#fff;border-bottom:1px solid var(--rule)}
   .gwrap{min-width:max-content}
@@ -154,7 +160,7 @@
   .h{font-family:'Alice',serif;font-size:17px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:8px}
   .h .n{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums}
   .step{font-family:'Alice',serif;font-size:15px;color:#3c4438;letter-spacing:.06em}
-  .card{background:#fff;padding:16px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:10px}
+  .card{background:#fff;padding:16px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:10px;overflow:hidden}
   .opt{display:flex;align-items:center;gap:12px;min-height:54px;padding:0 14px;border:1px solid var(--rule);border-radius:8px;background:#fff;cursor:pointer}
   .opt.on{border:2px solid var(--ink);background:#f2f4fb}
   .opt .dot{width:18px;height:18px;flex:none;border-radius:50%;border:1px solid #b9bdb2;background:#fff}
@@ -206,6 +212,7 @@ const STR = {
     search:'Search…',email:'Email',password:'Password',loginNote:'Only the choir director signs in. Everyone else can read the ledger.',
     loading:'Loading…',noEvents:'No events in this range yet.',noSongs:'No songs recorded yet.',
     exportTitle:'EXPORT',exportAtt:'Attendance CSV',exportSongs:'Song history CSV',
+    period:'Period',changePeriod:'Change',
     home:'Home',homeSub:'Choir attendance and song ledger',
     tAttGrid:'Attendance',tAttGridSub:'Who was at each rehearsal and service',
     tAttSum:'Attendance summary',tAttSumSub:'Percentage per singer',
@@ -232,6 +239,7 @@ const STR = {
     loading:'Загрузка…',noEvents:'В этом периоде событий нет.',noSongs:'Записей пока нет.',
     exportTitle:'ЭКСПОРТ',exportAtt:'Посещаемость CSV',exportSongs:'История песен CSV',
     home:'Главная',homeSub:'Журнал посещаемости и песнопений',
+    period:'Период',changePeriod:'Изменить',
     tAttGrid:'Посещаемость',tAttGridSub:'Кто был на спевках и служениях',
     tAttSum:'Сводка посещаемости',tAttSumSub:'Процент по каждому хористу',
     tSongGrid:'Песни',tSongGridSub:'Что пели на каждом служении',
@@ -276,7 +284,7 @@ function shift(months){ const d = new Date(); d.setMonth(d.getMonth() - months);
 function fmtLong(iso){ const [y,m,d] = iso.split('-').map(Number);
   return S.lang === 'en' ? MONF.en[m-1] + ' ' + d + ', ' + y : d + ' ' + MONF.ru[m-1] + ' ' + y; }
 function fmtShort(iso){ const [y,m,d] = iso.split('-');
-  return S.lang === 'en' ? m + '/' + d + '/' + y.slice(2) : d + '.' + m + '.' + y.slice(2); }
+  return m + '/' + d + '/' + y.slice(2); }   // numeric dates stay mm/dd/yy in both languages
 function monthKey(iso){ const [y,m] = iso.split('-').map(Number); return MON[S.lang][m-1] + ' ' + String(y).slice(2); }
 
 /* ---------- data ---------- */
@@ -398,7 +406,11 @@ function rangeCtrl(kind, typeFilter){
 
   // phone: a pill that opens the drawer
   return `<div class="ctlbar">
-      <button class="rangebtn ${S.showRange?'open':''}" data-toggle-range>${esc(fmtShort(from))} – ${esc(fmtShort(to))} <em>${S.showRange?'▴':'▾'}</em></button>
+      <button class="rangebtn ${S.showRange?'open':''}" data-toggle-range>
+        <em class="lb">${esc(t('period'))}</em>
+        <span class="rv">${esc(fmtShort(from))} – ${esc(fmtShort(to))}</span>
+        <em class="ed">${esc(t('changePeriod'))} ${S.showRange?'▴':'▾'}</em>
+      </button>
       ${seg}
     </div>${S.showRange ? `<div class="panel">${chips}${dates}</div>` : ''}`;
 }
@@ -519,7 +531,7 @@ function eventPicker(target){
         <div class="tag">${esc(k==='other' ? (S.draft.label || '—') : KIND_LABEL[S.lang][k])}</div></div>`).join('')}
       ${S.draft.kind==='other' ? `<div style="display:flex;gap:8px">
         <input class="field" id="draft-name" placeholder="${esc(t('eventName'))}" value="${esc(S.draft.name)}">
-        <input class="field" id="draft-label" style="width:96px;text-align:center" placeholder="${esc(t('shortLabel'))}" value="${esc(S.draft.label)}">
+        <input class="field" id="draft-label" style="width:96px;flex:none;text-align:center" placeholder="${esc(t('shortLabel'))}" value="${esc(S.draft.label)}">
       </div><div style="font-size:12px;color:var(--faint)">${esc(t('labelHint'))}</div>` : ''}
     </div>
     <div class="pad"><button class="btn" data-go="${target}">${esc(t(target==='att'?'markAtt':'chooseSongs'))}</button></div>
