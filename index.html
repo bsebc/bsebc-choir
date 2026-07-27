@@ -135,6 +135,10 @@
   .login{padding:44px 26px;display:flex;flex-direction:column;gap:16px;max-width:420px;margin:0 auto;width:100%}
   .login label{font-family:'Alice',serif;font-size:14px;color:#3c4438;letter-spacing:.06em}
   .login input{width:100%;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px 13px;font-size:16px}
+  .toast{position:sticky;bottom:0;z-index:9;background:var(--red);color:#fff;display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:14px}
+  .toast button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-weight:600}
+  .toast .m{flex:1;min-width:0}
+  .xbtn{border:1px solid var(--rule);border-radius:6px;padding:12px;font-size:15px;font-weight:600;color:var(--blue);background:#fff;flex:1}
 </style>
 </head>
 <body>
@@ -162,6 +166,8 @@ const STR = {
     add:'Add',fullName:'First and last name',voicePart:'Voice part',songTitle:'Song title',subtitle:'Subtitle (optional)',
     search:'Search…',email:'Email',password:'Password',loginNote:'Only the choir director signs in. Everyone else can read the ledger.',
     loading:'Loading…',noEvents:'No events in this range yet.',noSongs:'No songs recorded yet.',
+    exportTitle:'EXPORT',exportAtt:'Attendance CSV',exportSongs:'Song history CSV',
+    deleteEvent:'Delete this event and everything recorded for it?',notSaved:'Not saved',retry:'Retry',offline:'Offline — showing the last loaded data.',
     deleteSinger:'Delete this singer? Past marks stay in the ledger.',deleteSong:'Delete this song? Past services keep their record.',
     renameSinger:'Name',renameSong:'Title',soprano:'SOPRANO',alto:'ALTO',tenor:'TENOR',bass:'BASS',
     singersN:n=>n+' singers',songsN:n=>n+' songs',sungN:(n,d)=>'sung '+n+'× · last '+(d||'—'),wasPresent:'Present',wasAbsent:'Absent'},
@@ -177,6 +183,8 @@ const STR = {
     add:'Добавить',fullName:'Имя и фамилия',voicePart:'Партия',songTitle:'Название песни',subtitle:'Подзаголовок',
     search:'Поиск…',email:'Эл. почта',password:'Пароль',loginNote:'Доступ только у регента. Просмотр журнала — без входа.',
     loading:'Загрузка…',noEvents:'В этом периоде событий нет.',noSongs:'Записей пока нет.',
+    exportTitle:'ЭКСПОРТ',exportAtt:'Посещаемость CSV',exportSongs:'История песен CSV',
+    deleteEvent:'Удалить это событие и все его записи?',notSaved:'Не сохранено',retry:'Повторить',offline:'Нет сети — показаны последние загруженные данные.',
     deleteSinger:'Удалить хориста? Прошлые отметки останутся в журнале.',deleteSong:'Удалить песню? История служений сохранится.',
     renameSinger:'Имя',renameSong:'Название',soprano:'СОПРАНО',alto:'АЛЬТ',tenor:'ТЕНОР',bass:'БАС',
     singersN:n=>n+' чел.',songsN:n=>n+' песен',sungN:(n,d)=>'спето '+n+' · посл. '+(d||'—'),wasPresent:'Был',wasAbsent:'Не был'}
@@ -415,11 +423,19 @@ function eventPicker(target){
     <div class="pad"><button class="btn" data-go="${target}">${esc(t(target==='att'?'markAtt':'chooseSongs'))}</button></div>
     <div class="pad" style="padding-top:0">
       <div class="step" style="margin-bottom:8px">${esc(t('recent'))}</div>
-      ${recent.map(e => `<a class="li" style="border:1px solid var(--rule);border-radius:8px;margin-bottom:8px"
-          href="#/admin/${target==='att'?'attendance':'songs'}/${e.id}">
-        <div><div style="font-variant-numeric:tabular-nums">${esc(fmtLong(e.date))}</div>
-        <div style="font-size:13px;color:var(--muted)">${esc(e.name || t(e.kind))}</div></div>
-        <div style="margin-left:auto;color:var(--blue);font-weight:600">${esc(t('edit'))}</div></a>`).join('')}
+      ${recent.map(e => `<div class="li" style="border:1px solid var(--rule);border-radius:8px;margin-bottom:8px">
+        <a href="#/admin/${target==='att'?'attendance':'songs'}/${e.id}" style="flex:1;min-width:0;color:inherit">
+          <div style="font-variant-numeric:tabular-nums">${esc(fmtLong(e.date))}</div>
+          <div style="font-size:13px;color:var(--muted)">${esc(e.name || t(e.kind))}</div></a>
+        <a class="mini" href="#/admin/${target==='att'?'attendance':'songs'}/${e.id}">${esc(t('edit'))}</a>
+        <button class="mini danger" data-del-event="${e.id}">${esc(t('del'))}</button></div>`).join('')}
+    </div>
+    <div class="pad" style="padding-top:0">
+      <div class="step" style="margin-bottom:8px">${esc(t('exportTitle'))}</div>
+      <div style="display:flex;gap:8px">
+        <button class="xbtn" data-export="att">${esc(t('exportAtt'))}</button>
+        <button class="xbtn" data-export="songs">${esc(t('exportSongs'))}</button>
+      </div>
     </div>`;
 }
 function markAttendance(ev){
@@ -507,6 +523,33 @@ function loginPage(){
   </div>`;
 }
 
+/* ---------- CSV export ---------- */
+function download(name, text){
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + text], { type:'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+
+function exportCSV(kind){
+  const ev = S.events.slice().sort((a,b) => a.date < b.date ? -1 : 1);
+  if (kind === 'att') {
+    const head = ['singer','part', ...ev.map(e => e.date + ' ' + evLabel(e))];
+    const rows = PARTS.flatMap(p => S.singers.filter(s => s.part === p).map(s =>
+      [s.name, p, ...ev.map(e => isAbsent(e.id, s.id) ? 'A' : '')]));
+    download('attendance-' + today() + '.csv', [head, ...rows].map(r => r.map(q).join(',')).join('\n'));
+  } else {
+    const head = ['date','event','song','subtitle'];
+    const rows = [];
+    ev.forEach(e => S.eventSongs.filter(x => x.event_id === e.id).forEach(x => {
+      const s = S.songs.find(y => y.id === x.song_id); if (!s) return;
+      rows.push([e.date, e.name || e.kind, s.title, s.subtitle]);
+    }));
+    download('songs-' + today() + '.csv', [head, ...rows].map(r => r.map(q).join(',')).join('\n'));
+  }
+}
+
 /* ---------- render ---------- */
 function render(){
   const r = S.route;
@@ -551,12 +594,34 @@ function render(){
           `<button data-type="${v}" class="${S.typeFilter===v?'on':''}">${esc(t(l))}</button>`).join('')}
       </div></div>` + attendanceGrid();
   }
-  document.getElementById('app').innerHTML = html;
+  document.getElementById('app').innerHTML = html + toastHTML();
+  afterRender();
+}
+
+function toastHTML(){
+  if (!S.toast) return '';
+  return `<div class="toast"><div class="m">${esc(S.toast)}</div>
+    ${S.retry ? `<button data-retry>${esc(t('retry'))}</button>` : ''}
+    <button data-dismiss>×</button></div>`;
+}
+
+// keep the newest dates in view: jump the grid to its right edge when the page changes
+function afterRender(){
+  const sc = document.querySelector('.scroll');
+  if (!sc) return;
+  const key = S.route + '|' + S.from + '|' + S.to + '|' + S.typeFilter;
+  if (S.scrollKey !== key) { S.scrollKey = key; sc.scrollLeft = sc.scrollWidth; }
+}
+
+function fail(error, retry){
+  S.toast = t('notSaved') + ' — ' + (navigator.onLine ? error.message : t('offline'));
+  S.retry = retry || null;
+  render();
 }
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-lang],[data-preset],[data-type],[data-kind],[data-go],[data-toggle-absent],[data-toggle-song],[data-add-song],[data-del-song],[data-edit-song],[data-add-singer],[data-del-singer],[data-edit-singer],[data-login],[data-signout]');
+  const el = e.target.closest('[data-lang],[data-preset],[data-type],[data-kind],[data-go],[data-toggle-absent],[data-toggle-song],[data-add-song],[data-del-song],[data-edit-song],[data-add-singer],[data-del-singer],[data-edit-singer],[data-login],[data-signout],[data-del-event],[data-export],[data-dismiss],[data-retry]');
   if (!el) return;
   const d = el.dataset;
 
@@ -591,21 +656,51 @@ document.addEventListener('click', async e => {
   }
 
   if (d.toggleAbsent) {
-    const on = isAbsent(d.event, d.toggleAbsent);
-    if (on) { S.absences = S.absences.filter(a => !(a.event_id === d.event && a.singer_id === d.toggleAbsent));
-      render(); await sb.from('absences').delete().match({ event_id: d.event, singer_id: d.toggleAbsent }); }
-    else { S.absences.push({ event_id: d.event, singer_id: d.toggleAbsent });
-      render(); await sb.from('absences').insert({ event_id: d.event, singer_id: d.toggleAbsent }); }
-    return;
+    const ev = d.event, si = d.toggleAbsent, on = isAbsent(ev, si);
+    const go = async () => {
+      S.toast = ''; S.retry = null;
+      if (on) {
+        S.absences = S.absences.filter(a => !(a.event_id === ev && a.singer_id === si)); render();
+        const { error } = await sb.from('absences').delete().match({ event_id: ev, singer_id: si });
+        if (error) { S.absences.push({ event_id: ev, singer_id: si }); fail(error, go); }
+      } else {
+        S.absences.push({ event_id: ev, singer_id: si }); render();
+        const { error } = await sb.from('absences').insert({ event_id: ev, singer_id: si });
+        if (error) { S.absences = S.absences.filter(a => !(a.event_id === ev && a.singer_id === si)); fail(error, go); }
+      }
+    };
+    return go();
   }
   if (d.toggleSong) {
-    const on = wasSung(d.event, d.toggleSong);
-    if (on) { S.eventSongs = S.eventSongs.filter(x => !(x.event_id === d.event && x.song_id === d.toggleSong));
-      render(); await sb.from('event_songs').delete().match({ event_id: d.event, song_id: d.toggleSong }); }
-    else { S.eventSongs.push({ event_id: d.event, song_id: d.toggleSong });
-      render(); await sb.from('event_songs').insert({ event_id: d.event, song_id: d.toggleSong }); }
-    return;
+    const ev = d.event, so = d.toggleSong, on = wasSung(ev, so);
+    const go = async () => {
+      S.toast = ''; S.retry = null;
+      if (on) {
+        S.eventSongs = S.eventSongs.filter(x => !(x.event_id === ev && x.song_id === so)); render();
+        const { error } = await sb.from('event_songs').delete().match({ event_id: ev, song_id: so });
+        if (error) { S.eventSongs.push({ event_id: ev, song_id: so }); fail(error, go); }
+      } else {
+        S.eventSongs.push({ event_id: ev, song_id: so }); render();
+        const { error } = await sb.from('event_songs').insert({ event_id: ev, song_id: so });
+        if (error) { S.eventSongs = S.eventSongs.filter(x => !(x.event_id === ev && x.song_id === so)); fail(error, go); }
+      }
+    };
+    return go();
   }
+
+  if (d.delEvent) {
+    e.preventDefault();
+    if (!confirm(t('deleteEvent'))) return;
+    const { error } = await sb.from('events').delete().eq('id', d.delEvent);
+    if (error) return fail(error);
+    S.events = S.events.filter(x => x.id !== d.delEvent);
+    S.absences = S.absences.filter(a => a.event_id !== d.delEvent);
+    S.eventSongs = S.eventSongs.filter(x => x.event_id !== d.delEvent);
+    return render();
+  }
+  if (d.export) { return exportCSV(d.export); }
+  if (el.hasAttribute('data-dismiss')) { S.toast = ''; S.retry = null; return render(); }
+  if (el.hasAttribute('data-retry')) { const r = S.retry; S.toast = ''; S.retry = null; render(); return r && r(); }
 
   if (d.addSong !== undefined && el.hasAttribute('data-add-song')) {
     const title = document.getElementById('new-song-title').value.trim();
@@ -676,6 +771,10 @@ document.addEventListener('input', e => {
 window.addEventListener('hashchange', () => { S.route = location.hash || '#/attendance'; S.error = ''; render(); });
 
 /* ---------- boot ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+window.addEventListener('online', () => { if (S.toast) { S.toast = ''; render(); } load(); });
 S.from = shift(2); S.to = today(); S.sumFrom = shift(6); S.sumTo = today();
 const { data: { session } } = await sb.auth.getSession();
 S.session = session;
