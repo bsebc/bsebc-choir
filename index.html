@@ -48,6 +48,14 @@
   .tabs a{flex:1;padding:11px 0;text-align:center;font-size:15px;color:var(--muted);border-bottom:3px solid transparent}
   .tabs a.on{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
   .ctrl{background:#fff;padding:12px 14px 14px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:10px}
+  .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--rule)}
+  .rangebtn{display:flex;align-items:center;gap:6px;border:1px solid var(--rule);background:#fbfbf9;border-radius:999px;padding:7px 12px;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .rangebtn em{font-style:normal;color:var(--faint);font-size:11px}
+  .seg.tiny{margin-left:auto;border-radius:999px}
+  .seg.tiny button{padding:7px 11px;font-size:13px}
+  .panel{background:#fbfbf9;border-bottom:1px solid var(--rule);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .searchrow{padding:8px 12px 0;background:#fff}
+  @media (min-width:900px){ .panel{flex-direction:row;align-items:center;gap:20px} .panel .dates{max-width:420px} }
   @media (min-width:900px){ .ctrl{flex-direction:row;align-items:center;flex-wrap:wrap;padding:16px 20px} }
   .dates{display:flex;align-items:center;gap:8px}
   .dates input{flex:1;min-width:0;border:1px solid var(--rule);border-radius:6px;padding:8px 10px;font-size:16px;background:#fbfbf9;font-variant-numeric:tabular-nums}
@@ -135,7 +143,7 @@
   .login{padding:44px 26px;display:flex;flex-direction:column;gap:16px;max-width:420px;margin:0 auto;width:100%}
   .login label{font-family:'Alice',serif;font-size:14px;color:#3c4438;letter-spacing:.06em}
   .login input{width:100%;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:14px 13px;font-size:16px}
-  .toast{position:sticky;bottom:0;z-index:9;background:var(--red);color:#fff;display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:14px}
+  .toast{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--red);color:#fff;display:flex;align-items:center;gap:12px;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));font-size:14px}
   .toast button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-weight:600}
   .toast .m{flex:1;min-width:0}
   .xbtn{border:1px solid var(--rule);border-radius:6px;padding:12px;font-size:15px;font-weight:600;color:var(--blue);background:#fff;flex:1}
@@ -207,6 +215,7 @@ const S = {
   from: null, to: null,           // public grid range
   sumFrom: null, sumTo: null,     // summary range
   typeFilter: 'all',
+  preset: { grid: '2', sum: '6' },
   query: '',
   draft: { date: today(), kind: 'morning', name: '', label: '' }
 };
@@ -223,8 +232,8 @@ function fmtShort(iso){ const [y,m,d] = iso.split('-');
 function monthKey(iso){ const [y,m] = iso.split('-').map(Number); return MON[S.lang][m-1] + ' ' + String(y).slice(2); }
 
 /* ---------- data ---------- */
-async function load(){
-  S.loading = true; render();
+async function load(silent){
+  if (!silent) { S.loading = true; render(); }
   const [si, so, ev, ab, es] = await Promise.all([
     sb.from('singers').select('*').order('part').order('sort_order'),
     sb.from('songs').select('*').order('title'),
@@ -248,8 +257,13 @@ function gridEvents(){
     .filter(e => S.typeFilter === 'all' ? true
       : S.typeFilter === 'services' ? e.kind !== 'rehearsal' : e.kind === 'rehearsal');
 }
-function songStats(id){
-  const rows = S.eventSongs.filter(x => x.song_id === id);
+function songStats(id, from, to){
+  const rows = S.eventSongs.filter(x => {
+    if (x.song_id !== id) return false;
+    if (!from) return true;
+    const e = S.events.find(y => y.id === x.event_id);
+    return e && inRange(e.date, from, to);
+  });
   const dates = rows.map(r => (S.events.find(e => e.id === r.event_id) || {}).date).filter(Boolean).sort();
   return { n: rows.length, last: dates.length ? fmtShort(dates[dates.length-1]) : '' };
 }
@@ -286,20 +300,28 @@ function adminBar(active){
     ${i('#/admin/members','members','members')}
   </div>`;
 }
-function rangeCtrl(kind){
+function rangeCtrl(kind, typeFilter){
   const from = kind==='sum' ? S.sumFrom : S.from, to = kind==='sum' ? S.sumTo : S.to;
   const presets = kind==='sum'
     ? [['3',t('m3')],['6',t('m6')],['12',t('year')],['all',t('all')]]
     : [['2',t('m2')],['6',t('m6')],['12',t('year')],['all',t('all')]];
-  return `<div class="ctrl">
-    <div class="dates">
-      <input type="date" value="${from}" data-range="${kind}" data-edge="from">
-      <span>—</span>
-      <input type="date" value="${to}" data-range="${kind}" data-edge="to">
-    </div>
-    <div class="chips">${presets.map(([v,l]) =>
-      `<button data-preset="${v}" data-range="${kind}">${esc(l)}</button>`).join('')}</div>
-  </div>`;
+  const seg = typeFilter ? `<div class="seg tiny">${
+      [['all','all'],['services','services'],['rehearsals','rehearsals']].map(([v,l]) =>
+        `<button data-type="${v}" class="${S.typeFilter===v?'on':''}">${esc(t(l))}</button>`).join('')
+    }</div>` : '';
+  const panel = S.showRange ? `<div class="panel">
+      <div class="chips">${presets.map(([v,l]) =>
+        `<button data-preset="${v}" data-range="${kind}" class="${S.preset[kind]===v?'on':''}">${esc(l)}</button>`).join('')}</div>
+      <div class="dates">
+        <input type="date" value="${from}" data-range="${kind}" data-edge="from">
+        <span>—</span>
+        <input type="date" value="${to}" data-range="${kind}" data-edge="to">
+      </div>
+    </div>` : '';
+  return `<div class="bar">
+      <button class="rangebtn" data-toggle-range>${esc(fmtShort(from))} – ${esc(fmtShort(to))} <em>▾</em></button>
+      ${seg}
+    </div>${panel}`;
 }
 
 /* ---------- public: attendance ---------- */
@@ -389,7 +411,8 @@ function songsByService(){
   }).join('');
 }
 function songsSummary(){
-  const rows = S.songs.map(s => ({ s, st: songStats(s.id) })).sort((a,b) => b.st.n - a.st.n);
+  const rows = S.songs.map(s => ({ s, st: songStats(s.id, S.sumFrom, S.sumTo) }))
+    .filter(r => r.st.n > 0).sort((a,b) => b.st.n - a.st.n);
   if (!rows.length) return `<div class="msg">${esc(t('noSongs'))}</div>`;
   const max = Math.max(1, ...rows.map(r => r.st.n));
   return `<div class="li" style="background:#fbfbf9;font-size:12px;color:var(--muted)">
@@ -580,8 +603,9 @@ function render(){
       <a href="#/songs/summary" class="${tab==='summary'?'on':''}">${esc(t('summary'))}</a></div>`;
     if (tab === 'summary') html += rangeCtrl('sum') + songsSummary();
     else if (tab === 'services') html += rangeCtrl('grid') + songsByService();
-    else html += `<div class="ctrl"><input class="field" id="q" placeholder="${esc(t('search'))}" value="${esc(S.query)}"></div>`
-      + rangeCtrl('grid') + songsGrid();
+    else html += rangeCtrl('grid')
+      + `<div class="searchrow"><input class="field" id="q" placeholder="${esc(t('search'))}" value="${esc(S.query)}"></div>`
+      + songsGrid();
   }
   else {
     const tab = r.split('/')[2] || 'grid';
@@ -589,10 +613,7 @@ function render(){
       <a href="#/attendance/grid" class="${tab==='grid'?'on':''}">${esc(t('grid'))}</a>
       <a href="#/attendance/summary" class="${tab==='summary'?'on':''}">${esc(t('summary'))}</a></div>`;
     if (tab === 'summary') html += rangeCtrl('sum') + attendanceSummary();
-    else html += rangeCtrl('grid') + `<div class="ctrl"><div class="seg">
-        ${[['all','all'],['services','services'],['rehearsals','rehearsals']].map(([v,l]) =>
-          `<button data-type="${v}" class="${S.typeFilter===v?'on':''}">${esc(t(l))}</button>`).join('')}
-      </div></div>` + attendanceGrid();
+    else html += rangeCtrl('grid', true) + attendanceGrid();
   }
   document.getElementById('app').innerHTML = html + toastHTML();
   afterRender();
@@ -621,14 +642,16 @@ function fail(error, retry){
 
 /* ---------- events ---------- */
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-lang],[data-preset],[data-type],[data-kind],[data-go],[data-toggle-absent],[data-toggle-song],[data-add-song],[data-del-song],[data-edit-song],[data-add-singer],[data-del-singer],[data-edit-singer],[data-login],[data-signout],[data-del-event],[data-export],[data-dismiss],[data-retry]');
+  const el = e.target.closest('[data-lang],[data-preset],[data-type],[data-kind],[data-go],[data-toggle-absent],[data-toggle-song],[data-add-song],[data-del-song],[data-edit-song],[data-add-singer],[data-del-singer],[data-edit-singer],[data-login],[data-signout],[data-del-event],[data-export],[data-dismiss],[data-retry],[data-toggle-range]');
   if (!el) return;
   const d = el.dataset;
 
   if (d.lang) { S.lang = d.lang; localStorage.setItem('bsebc-lang', d.lang); return render(); }
 
+  if (el.hasAttribute('data-toggle-range')) { S.showRange = !S.showRange; return render(); }
   if (d.preset) {
     const months = d.preset === 'all' ? 600 : +d.preset;
+    S.preset[d.range] = d.preset;
     if (d.range === 'sum') { S.sumFrom = shift(months); S.sumTo = today(); }
     else { S.from = shift(months); S.to = today(); }
     return render();
@@ -648,7 +671,7 @@ document.addEventListener('click', async e => {
     let ev = S.events.find(x => x.date === row.date && x.kind === row.kind && (x.name || '') === (row.name || ''));
     if (!ev) {
       const { data, error } = await sb.from('events').insert(row).select().single();
-      if (error) { S.error = error.message; return render(); }
+      if (error) return fail(error);
       ev = data; S.events.push(ev); S.events.sort((a,b) => a.date < b.date ? -1 : 1);
     }
     location.hash = '#/admin/' + (d.go === 'att' ? 'attendance' : 'songs') + '/' + ev.id;
@@ -707,7 +730,7 @@ document.addEventListener('click', async e => {
     if (!title) return;
     const subtitle = document.getElementById('new-song-sub').value.trim() || null;
     const { data, error } = await sb.from('songs').insert({ title, subtitle }).select().single();
-    if (error) { S.error = error.message; return render(); }
+    if (error) return fail(error);
     S.songs.push(data); S.songs.sort((a,b) => a.title.localeCompare(b.title)); return render();
   }
   if (d.editSong) {
@@ -727,7 +750,7 @@ document.addEventListener('click', async e => {
     if (!name) return;
     const part = document.getElementById('new-singer-part').value;
     const { data, error } = await sb.from('singers').insert({ name, part }).select().single();
-    if (error) { S.error = error.message; return render(); }
+    if (error) return fail(error);
     S.singers.push(data); return render();
   }
   if (d.editSinger) {
@@ -756,6 +779,7 @@ document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.range) {
     const v = el.value;
+    S.preset[el.dataset.range] = null;
     if (el.dataset.range === 'sum') { if (el.dataset.edge === 'from') S.sumFrom = v; else S.sumTo = v; }
     else { if (el.dataset.edge === 'from') S.from = v; else S.to = v; }
     render();
@@ -768,14 +792,19 @@ document.addEventListener('input', e => {
     const again = document.getElementById('q'); if (again) { again.focus(); again.setSelectionRange(pos, pos); }
   }
 });
-window.addEventListener('hashchange', () => { S.route = location.hash || '#/attendance'; S.error = ''; render(); });
+window.addEventListener('hashchange', () => {
+  S.route = location.hash || '#/attendance';
+  S.error = ''; S.query = '';
+  render();
+});
 
 /* ---------- boot ---------- */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
-window.addEventListener('online', () => { if (S.toast) { S.toast = ''; render(); } load(); });
+window.addEventListener('online', () => { if (S.toast) { S.toast = ''; render(); } load(true); });
 S.from = shift(2); S.to = today(); S.sumFrom = shift(6); S.sumTo = today();
+S.showRange = window.innerWidth >= 900;
 const { data: { session } } = await sb.auth.getSession();
 S.session = session;
 sb.auth.onAuthStateChange((_e, s) => { S.session = s; render(); });

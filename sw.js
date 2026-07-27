@@ -23,6 +23,18 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;                       // never touch writes
   const url = new URL(req.url);
 
+  // the page itself: always try the network first so a new deploy shows up at once
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(SHELL).then(c => c.put('./index.html', copy));
+        return res;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
   // Supabase reads and Google Fonts: network first, cache as backup
   if (url.hostname.endsWith('.supabase.co') || url.hostname.endsWith('gstatic.com')
       || url.hostname.endsWith('googleapis.com')) {
