@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BSEBC Choir</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#17203a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BSEBC Choir">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Alice&family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -146,7 +153,7 @@ const STR = {
     byService:'By service',all:'All',services:'Services',rehearsals:'Rehearsals',m2:'2 mo',m3:'3 mo',m6:'6 mo',year:'Year',
     singer:'Singer',song:'Song',times:'Times',last:'Last sung',present:'present',absent:'absent',service:'service',
     sung:'sung at this service',labels:'M — morning service · E — evening service · R — rehearsal',
-    songList:'Song list',members:'Members',whoCame:'Who came',absentN:'absent',whatSang:'What we sang',selected:'selected',
+    admin:'Admin',songList:'Song list',members:'Members',whoCame:'Who came',absentN:'absent',whatSang:'What we sang',selected:'selected',
     autosave:'Every tap saves right away — there is no Save button.',done:'Done',date:'1 · DATE',event:'2 · EVENT',
     rehearsal:'Rehearsal',morning:'Sunday morning',evening:'Sunday evening',other:'Other event',
     eventName:'Event name',shortLabel:'Label',labelHint:'The short label shows under the date in the grid — 1–2 letters.',
@@ -161,7 +168,7 @@ const STR = {
     byService:'По служениям',all:'Всё',services:'Служения',rehearsals:'Спевки',m2:'2 мес',m3:'3 мес',m6:'Полгода',year:'Год',
     singer:'Хорист',song:'Песня',times:'Всего',last:'Последний',present:'был',absent:'не был',service:'служение',
     sung:'пели в это служение',labels:'Ут — утреннее · Вч — вечернее · Сп — спевка',
-    songList:'Список',members:'Состав',whoCame:'Кто был',absentN:'отсутствуют',whatSang:'Что пели',selected:'выбрано',
+    admin:'Админка',songList:'Список песен',members:'Состав',whoCame:'Кто был',absentN:'отсутствуют',whatSang:'Что пели',selected:'выбрано',
     autosave:'Изменения сохраняются сразу — кнопки «Сохранить» нет.',done:'Готово',date:'1 · ДАТА',event:'2 · СОБЫТИЕ',
     rehearsal:'Спевка',morning:'Воскресное утреннее',evening:'Воскресное вечернее',other:'Другое событие',
     eventName:'Название события',shortLabel:'Метка',labelHint:'Короткая метка показывается под датой в сетке — 1–2 буквы.',
@@ -181,7 +188,7 @@ const PARTS = ['soprano','alto','tenor','bass'];
 const KIND_LABEL = { en:{rehearsal:'R',morning:'M',evening:'E'}, ru:{rehearsal:'Сп',morning:'Ут',evening:'Вч'} };
 
 const S = {
-  lang: localStorage.getItem('bsebc-lang') || 'ru',
+  lang: localStorage.getItem('bsebc-lang') || 'en',
   session: null,
   route: location.hash || '#/attendance',
   loading: true,
@@ -249,13 +256,15 @@ function mast(){
   </div><div class="gold"></div>`;
 }
 function publicNav(active){
-  const admin = S.session
-    ? `<a href="#/admin/attendance" class="right">${esc(t('signout')==='Sign out'?'Admin':'Админка')}</a>`
+  const right = S.session
+    ? `<a href="#/attendance" class="right" data-signout>${esc(t('signout'))}</a>`
     : `<a href="#/login" class="right">${esc(t('signin'))}</a>`;
+  const adminTab = S.session
+    ? `<a href="#/admin/attendance" class="${active==='admin'?'on':''}">${esc(t('admin'))}</a>` : '';
   return `<div class="nav">
     <a href="#/attendance" class="${active==='att'?'on':''}">${esc(t('attendance'))}</a>
     <a href="#/songs" class="${active==='songs'?'on':''}">${esc(t('songs'))}</a>
-    ${admin}
+    ${adminTab}${right}
   </div>`;
 }
 function adminBar(active){
@@ -508,8 +517,7 @@ function render(){
     const seg = r.split('/');          // #, admin, section, id?
     const section = seg[2] || 'attendance', id = seg[3];
     const ev = id ? S.events.find(e => e.id === id) : null;
-    html += `<div class="nav"><a class="on">${esc(t('signin')==='Sign in'?'Admin':'Админка')}</a>
-      <a class="right" data-signout href="#/attendance">${esc(t('signout'))}</a></div>`;
+    html += publicNav('admin');
     html += `<div class="body">`;
     if (section === 'attendance') html += ev ? markAttendance(ev) : eventPicker('att');
     else if (section === 'songs') html += ev ? markSongs(ev) : eventPicker('songs');
