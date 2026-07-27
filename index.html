@@ -186,6 +186,7 @@ const MONF = { en:['January','February','March','April','May','June','July','Aug
                ru:['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'] };
 const PARTS = ['soprano','alto','tenor','bass'];
 const KIND_LABEL = { en:{rehearsal:'R',morning:'M',evening:'E'}, ru:{rehearsal:'Сп',morning:'Ут',evening:'Вч'} };
+const evLabel = e => e.kind === 'other' ? e.label : KIND_LABEL[S.lang][e.kind];
 
 const S = {
   lang: localStorage.getItem('bsebc-lang') || 'en',
@@ -302,7 +303,7 @@ function attendanceGrid(){
       months.map(m => `<div class="m" style="width:calc(var(--cell) * ${m.n})">${esc(m.k)}</div>`).join('')
     }<div class="tail" style="height:26px;background:#f4f5f1"></div></div>
     <div class="row hday"><div class="spacer">${esc(t('singer'))}</div>${
-      ev.map(e => `<div class="d ${e.kind!=='rehearsal'?'svc':''}"><span>${+e.date.slice(8,10)}</span><em>${esc(e.label)}</em></div>`).join('')
+      ev.map(e => `<div class="d ${e.kind!=='rehearsal'?'svc':''}"><span>${+e.date.slice(8,10)}</span><em>${esc(evLabel(e))}</em></div>`).join('')
     }<div class="tail" style="height:40px;border-bottom:2px solid var(--ink)"></div></div>`;
 
   const body = PARTS.map(p => {
@@ -355,7 +356,7 @@ function songsGrid(){
       months.map(m => `<div class="m" style="width:calc(var(--cell) * ${m.n})">${esc(m.k)}</div>`).join('')
     }<div class="tail" style="height:26px;background:#f4f5f1"></div></div>
     <div class="row hday srow hd"><div class="spacer">${esc(t('song'))}</div>${
-      ev.map(e => `<div class="d svc"><span>${+e.date.slice(8,10)}</span><em>${esc(e.label)}</em></div>`).join('')
+      ev.map(e => `<div class="d svc"><span>${+e.date.slice(8,10)}</span><em>${esc(evLabel(e))}</em></div>`).join('')
     }<div class="tail" style="height:40px;border-bottom:2px solid var(--ink)"></div></div>`;
   const body = songs.map(s => {
     const st = songStats(s.id);
