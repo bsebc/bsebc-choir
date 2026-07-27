@@ -223,7 +223,7 @@ const STR = {
     exportTitle:'EXPORT',exportAtt:'Attendance CSV',exportSongs:'Song history CSV',
     period:'Period',changePeriod:'Change',
     tSheets:'Sheet music',tSheetsSub:'Download the notes for each song',
-    sheets:'Sheet music',download:'Download',upload:'Upload PDF',replace:'Replace',removePdf:'Remove',
+    sheets:'Sheet music',download:'Open',upload:'Upload PDF',replace:'Replace',removePdf:'Remove',
     noPdf:'No file yet',uploading:'Uploading…',pdfOnly:'Please choose a PDF file.',
     confirmRemovePdf:'Remove the PDF for this song?',withPdf:n=>n+' with sheet music',
     home:'Home',homeSub:'Choir attendance and song ledger',
@@ -254,7 +254,7 @@ const STR = {
     home:'Главная',homeSub:'Журнал посещаемости и песнопений',
     period:'Период',changePeriod:'Изменить',
     tSheets:'Ноты',tSheetsSub:'Скачать ноты к каждой песне',
-    sheets:'Ноты',download:'Скачать',upload:'Загрузить PDF',replace:'Заменить',removePdf:'Удалить',
+    sheets:'Ноты',download:'Открыть',upload:'Загрузить PDF',replace:'Заменить',removePdf:'Удалить',
     noPdf:'Файла нет',uploading:'Загрузка…',pdfOnly:'Выберите файл PDF.',
     confirmRemovePdf:'Удалить ноты этой песни?',withPdf:n=>'с нотами: '+n,
     tAttGrid:'Посещаемость',tAttGridSub:'Кто был на спевках и служениях',
@@ -672,7 +672,7 @@ function sheetsPage(){
         </div>`;
       if (busy) return `<div class="li">${left}<div style="color:var(--blue);font-weight:600;font-size:14px">${esc(t('uploading'))}</div></div>`;
       const dl = s.pdf_path
-        ? `<a class="mini" href="${esc(url)}" target="_blank" rel="noopener" download>${esc(t('download'))}</a>` : '';
+        ? `<a class="mini" href="${esc(url)}" target="_blank" rel="noopener">${esc(t('download'))}</a>` : '';
       const admin = S.session ? `
         <label class="mini" for="up-${s.id}">${esc(s.pdf_path ? t('replace') : t('upload'))}
           <input id="up-${s.id}" type="file" accept="application/pdf,.pdf" data-upload="${s.id}" style="display:none">
