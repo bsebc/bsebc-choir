@@ -226,6 +226,7 @@ const STR = {
     sheets:'Sheet music',download:'Open',upload:'Upload PDF',replace:'Replace',removePdf:'Remove',
     noPdf:'No file yet',uploading:'Uploading…',pdfOnly:'Please choose a PDF file.',
     confirmRemovePdf:'Remove the PDF for this song?',withPdf:n=>n+' with sheet music',
+    sessionLost:'Your sign-in expired. Please sign in again.',
     home:'Home',homeSub:'Choir attendance and song ledger',
     tAttGrid:'Attendance',tAttGridSub:'Who was at each rehearsal and service',
     tAttSum:'Attendance summary',tAttSumSub:'Percentage per singer',
@@ -257,6 +258,7 @@ const STR = {
     sheets:'Ноты',download:'Открыть',upload:'Загрузить PDF',replace:'Заменить',removePdf:'Удалить',
     noPdf:'Файла нет',uploading:'Загрузка…',pdfOnly:'Выберите файл PDF.',
     confirmRemovePdf:'Удалить ноты этой песни?',withPdf:n=>'с нотами: '+n,
+    sessionLost:'Сеанс истёк. Войдите снова.',
     tAttGrid:'Посещаемость',tAttGridSub:'Кто был на спевках и служениях',
     tAttSum:'Сводка посещаемости',tAttSumSub:'Процент по каждому хористу',
     tSongGrid:'Песни',tSongGridSub:'Что пели на каждом служении',
@@ -778,6 +780,30 @@ function afterRender(){
   sc.addEventListener('scroll', () => { S.scrollLeft = sc.scrollLeft; }, { passive: true });
 }
 
+/* An expired access token is rejected by row-level security with no error object —
+   the write simply affects nothing. Refresh before every admin write, and treat
+   "zero rows changed" as a lost session rather than a success. */
+async function ensureSession(){
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { S.session = null; render(); return false; }
+  if ((session.expires_at || 0) * 1000 - Date.now() < 60000) {
+    const { data, error } = await sb.auth.refreshSession();
+    if (error || !data.session) { S.session = null; location.hash = '#/login'; return false; }
+    S.session = data.session;
+  }
+  return true;
+}
+
+function wrote(res){
+  if (res.error) { fail(res.error); return false; }
+  if (Array.isArray(res.data) && res.data.length === 0) {
+    fail({ message: t('sessionLost') });
+    S.session = null;
+    return false;
+  }
+  return true;
+}
+
 function fail(error, retry){
   S.toast = t('notSaved') + ' — ' + (navigator.onLine ? error.message : t('offline'));
   S.retry = retry || null;
@@ -858,8 +884,9 @@ document.addEventListener('click', async e => {
   if (d.delEvent) {
     e.preventDefault();
     if (!confirm(t('deleteEvent'))) return;
-    const { error } = await sb.from('events').delete().eq('id', d.delEvent);
-    if (error) return fail(error);
+    if (!await ensureSession()) return;
+    const res = await sb.from('events').delete().eq('id', d.delEvent).select();
+    if (!wrote(res)) return render();
     S.events = S.events.filter(x => x.id !== d.delEvent);
     S.absences = S.absences.filter(a => a.event_id !== d.delEvent);
     S.eventSongs = S.eventSongs.filter(x => x.event_id !== d.delEvent);
@@ -890,14 +917,24 @@ document.addEventListener('click', async e => {
   if (d.editSong) {
     const s = S.songs.find(x => x.id === d.editSong);
     const title = prompt(t('renameSong'), s.title); if (title === null) return;
+    const clean = title.trim(); if (!clean) return;
     const subtitle = prompt(t('subtitle'), s.subtitle || '');
-    await sb.from('songs').update({ title, subtitle: subtitle || null }).eq('id', s.id);
-    s.title = title; s.subtitle = subtitle || null; return render();
+    if (!await ensureSession()) return;
+    const res = await sb.from('songs').update({ title: clean, subtitle: (subtitle || '').trim() || null })
+      .eq('id', s.id).select();
+    if (!wrote(res)) return render();
+    s.title = clean; s.subtitle = (subtitle || '').trim() || null;
+    S.songs.sort((a,b) => a.title.localeCompare(b.title));
+    return render();
   }
   if (d.delSong) {
     if (!confirm(t('deleteSong'))) return;
-    await sb.from('songs').delete().eq('id', d.delSong);
-    S.songs = S.songs.filter(x => x.id !== d.delSong); return render();
+    if (!await ensureSession()) return;
+    const res = await sb.from('songs').delete().eq('id', d.delSong).select();
+    if (!wrote(res)) return render();
+    S.songs = S.songs.filter(x => x.id !== d.delSong);
+    S.eventSongs = S.eventSongs.filter(x => x.song_id !== d.delSong);
+    return render();
   }
   if (el.hasAttribute('data-add-singer')) {
     const name = document.getElementById('new-singer-name').value.trim();
@@ -910,13 +947,20 @@ document.addEventListener('click', async e => {
   if (d.editSinger) {
     const s = S.singers.find(x => x.id === d.editSinger);
     const name = prompt(t('renameSinger'), s.name); if (name === null) return;
-    await sb.from('singers').update({ name }).eq('id', s.id);
-    s.name = name; return render();
+    const clean = name.trim(); if (!clean) return;
+    if (!await ensureSession()) return;
+    const res = await sb.from('singers').update({ name: clean }).eq('id', s.id).select();
+    if (!wrote(res)) return render();
+    s.name = clean; return render();
   }
   if (d.delSinger) {
     if (!confirm(t('deleteSinger'))) return;
-    await sb.from('singers').delete().eq('id', d.delSinger);
-    S.singers = S.singers.filter(x => x.id !== d.delSinger); return render();
+    if (!await ensureSession()) return;
+    const res = await sb.from('singers').delete().eq('id', d.delSinger).select();
+    if (!wrote(res)) return render();
+    S.singers = S.singers.filter(x => x.id !== d.delSinger);
+    S.absences = S.absences.filter(x => x.singer_id !== d.delSinger);
+    return render();
   }
 
   if (el.hasAttribute('data-login')) {
@@ -979,6 +1023,13 @@ window.addEventListener('resize', () => { if (isWide() !== wasWide) { wasWide = 
 const { data: { session } } = await sb.auth.getSession();
 S.session = session;
 sb.auth.onAuthStateChange((_e, s) => { S.session = s; render(); });
+// iOS suspends a home-screen app rather than closing it: the token can be hours
+// stale when it comes back. Refresh it, and re-read the data, on return.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  if (S.session) await ensureSession();
+  load(true);
+});
 await load();
 </script>
 </body>
