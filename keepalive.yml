@@ -1,0 +1,44 @@
+name: Keep Supabase awake
+
+# Free-tier Supabase projects pause after 7 days with no API requests.
+# This makes one tiny read every day so that never happens. GitHub's scheduler
+# is best-effort and quietly skips runs when it is busy, so daily gives about
+# six missed days of slack before the project could pause.
+
+on:
+  schedule:
+    - cron: '17 12 * * *'     # every day, 12:17 UTC (off-the-hour runs get skipped less)
+  workflow_dispatch:          # lets you run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the REST API
+        env:
+          SUPABASE_URL: https://qynprpimmjansluhuoez.supabase.co
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5bnBycGltbWphbnNsdWh1b2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNjc4NzQsImV4cCI6MjEwMDc0Mzg3NH0.dJNRtomDs8bpqleXRmZZB0JG04M3l8MiAi1pTHuxYME
+        run: |
+          set -u
+          # A real table read. The REST root (/rest/v1/) answers 401 to the anon
+          # key, which is why the earlier version failed — it was never a sign
+          # that the project was asleep.
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/songs?select=id&limit=1")
+          echo "REST songs -> HTTP $code"
+
+          # Fallback that needs no key at all, in case the table is ever renamed.
+          if [ "$code" = "000" ]; then
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$SUPABASE_URL/auth/v1/health")
+            echo "auth health -> HTTP $code"
+          fi
+
+          # Any HTTP answer means the project is awake and served the request,
+          # which is the whole point. Only a network failure (000) or a server
+          # error (5xx) is a real problem.
+          case "$code" in
+            000|5??) echo "Project did not respond properly."; exit 1 ;;
+            *)       echo "Project is awake."; exit 0 ;;
+          esac
