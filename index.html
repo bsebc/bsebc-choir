@@ -2812,8 +2812,12 @@ function manageSongs(){
   return `<div class="h">${esc(t('songList'))}<span class="n">${esc(t('songsN')(S.songs.length))}</span></div>` +
     `<div class="sec">` + catManager() + `</div><div class="sec">` + addFold('song', `
       <input class="field" id="new-song-title" placeholder="${esc(t('songTitle'))}">
+      <input class="field" id="new-song-sub" placeholder="${esc(t('subtitle'))}">
       <div style="display:flex;gap:8px">
-        <input class="field" id="new-song-sub" placeholder="${esc(t('subtitle'))}">
+        ${S.categories.length ? `<select class="field" id="new-song-cat" style="flex:1;min-width:0">
+          <option value="">${esc(t('noCat'))}</option>
+          ${S.categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+        </select>` : '<div style="flex:1"></div>'}
         <button class="mini" style="background:var(--blue);color:var(--white);border-color:var(--blue-text);padding:12px 20px" data-add-song>${esc(t('add'))}</button>
       </div>`, 'addSong') + `</div><div class="sec"><div class="card">${qField()}</div></div><div class="sec">` +
     list.map(s => { const st = songStats(s.id);
@@ -3677,7 +3681,9 @@ document.addEventListener('click', async e => {
     if (!title) return;
     if (!await ensureSession()) return;
     const subtitle = document.getElementById('new-song-sub').value.trim() || null;
-    const { data, error } = await sb.from('songs').insert({ title, subtitle }).select().single();
+    const catEl = document.getElementById('new-song-cat');
+    const category_id = catEl && catEl.value ? catEl.value : null;
+    const { data, error } = await sb.from('songs').insert({ title, subtitle, category_id }).select().single();
     if (error) return fail(error);
     S.songs.push(data); S.songs.sort((a,b) => a.title.localeCompare(b.title)); return render();
   }
