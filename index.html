@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>BSEBC Choir</title>
 <meta name="description" content="Song orders, attendance and sheet music · Песнопения, посещаемость и ноты">
-  <!-- If the senior site lives on a different address, change the two URLs below to match. -->
+  <!-- If this site lives on a different address, change the two URLs below to match. -->
 <!-- Link preview card. A static site returns the same HTML for every URL, so these
      describe the site as a whole; the Share buttons put the page name in the message. -->
 <meta property="og:type" content="website">
@@ -1901,7 +1901,7 @@ const STR = {
     sessionLost:'Your sign-in expired. Please sign in again.',
     blocksN:n=>n===1?'1 block':n+' blocks',
     stEvent:'Event',stSongs:'Songs',stReview:'Review',review:'Review',back:'Back',draft:'Draft',recordAtt:'Mark attendance',planSvc:'Plan a service',repertoire:'Repertoire',usageIns:'Usage insights',editSongT:'Edit song',editMemberT:'Edit member',allPresent:'Everyone is marked present.',cancelEvent:'Cancel event',neverSung:'Not sung before',date2:'Date',event2:'Event',recentT:'Recent entries',exportT:'Export',titleL:'Title',catL:'Category',pvL:'№ in Песнь возрождения',nameL:'Full name · surname first',saveSong:'Save song',sinceD:d=>'since '+d,fromRoster:'Someone already on the roster',orNew:'…or add a new person:',
-    appName:'Senior Choir',appTag:'Music · attendance',overview:'Overview',navWork:'Workspace',navLib:'Music library',navChoir:'Our choir',navDir:'Director',
+    appName:'BSEBC Choir',appTag:'Music · attendance',overview:'Overview',navWork:'Workspace',navLib:'Music library',navChoir:'Our choir',navDir:'Director',
     findSong:'Find a song',dirSignin:'Director sign in',dirSigninSub:'Manage the choir',dirWs:'Director workspace',signedIn:'Signed in',
     kSingers:'Singers',kParts:n=>n===1?'1 voice part':n+' voice parts',kActive:n=>n===1?'1 active singer':n+' active singers',kRep:'Repertoire',kRepSub:n=>n+' with choir sheets',
     kAtt:'Attendance',kAttSub:'Last 30 days',kSvc:'Services',kSvcSub:n=>n===1?'1 song sung · 12 months':n+' songs sung · 12 months',
@@ -1996,7 +1996,7 @@ const STR = {
     backupBtn:'Полная копия',backupNote:'Скачивает все таблицы — хористы, события, посещаемость, песни, категории — одним файлом JSON. PDF-ноты не входят.',backupFail:'Не удалось создать копию — попробуйте ещё раз.',
     blocksN:n=>n+' '+(n%10===1&&n%100!==11?'блок':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'блока':'блоков'),
     stEvent:'Событие',stSongs:'Песни',stReview:'Проверка',review:'Проверить',back:'Назад',draft:'Черновик',recordAtt:'Отметить посещаемость',planSvc:'План служения',repertoire:'Репертуар',usageIns:'Активность',editSongT:'Изменить песню',editMemberT:'Изменить участника',allPresent:'Все отмечены присутствующими.',cancelEvent:'Отменить событие',neverSung:'Ранее не исполнялась',date2:'Дата',event2:'Событие',recentT:'Последние записи',exportT:'Экспорт',titleL:'Название',catL:'Категория',pvL:'№ в «Песни возрождения»',nameL:'Фамилия и имя',saveSong:'Сохранить песню',sinceD:d=>'с '+d,fromRoster:'Кто-то из состава',orNew:'…или добавьте нового человека:',
-    appName:'Взрослый хор',appTag:'Ноты · посещения',overview:'Обзор',navWork:'Пространство',navLib:'Библиотека',navChoir:'Наш хор',navDir:'Регент',
+    appName:'BSEBC Choir',appTag:'Ноты · посещения',overview:'Обзор',navWork:'Пространство',navLib:'Библиотека',navChoir:'Наш хор',navDir:'Регент',
     findSong:'Найти песню',dirSignin:'Вход для регента',dirSigninSub:'Управление хором',dirWs:'Кабинет регента',signedIn:'Вы вошли',
     kSingers:'Хористы',kParts:n=>n+(n===1?' партия':n<5?' партии':' партий'),kActive:n=>'активных хористов: '+n,kRep:'Репертуар',kRepSub:n=>'с нотами: '+n,
     kAtt:'Посещаемость',kAttSub:'За 30 дней',kSvc:'Служения',kSvcSub:n=>'песен спето: '+n+' · 12 мес.',
@@ -2162,13 +2162,14 @@ const hasLyrics = s => Array.isArray(s.lyrics) && s.lyrics.length > 0;
 function localISO(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function today(){ return localISO(new Date()); }
 const EPOCH = '2017-01-01';        // no choir records exist before this
-const VERSION = '5.1.14';
+const VERSION = '5.1.15';
 /* the church card in the sidebar */
 const CHURCH = { mark:'B', name:'Brookhaven Slavic Baptist Church', choir:{ en:'Church choir', ru:'Церковный хор' } };
 if (location.search.indexOf('menu') > -1) S.menuOpen = true;
 /* what to say under "Release notes" — one list per major version */
 const NOTES = { '5': {
   en: [
+    'The site is now called BSEBC Choir in both languages',
     'In Russian, Sunday services are now called “Воскресенье Утро” and “Воскресенье Вечер” everywhere',
     'On phones the grey scroll bar on the side is hidden',
     'On iPhone the tab bar now responds right away, even while the page is still scrolling',
@@ -2195,6 +2196,7 @@ const NOTES = { '5': {
     'New phone bottom bar: icons only, the selected tab opens with its name, and the bar tucks in while you scroll'
   ],
   ru: [
+    'Сайт теперь называется BSEBC Choir на обоих языках',
     'Воскресные служения теперь везде называются «Воскресенье Утро» и «Воскресенье Вечер»',
     'На телефоне серая полоса прокрутки сбоку скрыта',
     'На iPhone нижняя панель теперь срабатывает сразу, даже пока страница ещё прокручивается',
